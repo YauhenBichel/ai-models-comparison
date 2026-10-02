@@ -23,8 +23,12 @@ jobs:
           uv run --python ${{ matrix.python }} ruff check .
           uv run --python ${{ matrix.python }} mypy
           uv run --python ${{ matrix.python }} pytest -q
+      - name: The browser's judge agrees with Python's (golden cases)
+        run: node --test tests/
       - name: The command runs from a built wheel
         run: |
           uv build --wheel
           uvx --from dist/*.whl ai-models-comparison --version
           uvx --from dist/*.whl ai-models-comparison machine
+          uvx --from dist/*.whl ai-models-comparison site --out /tmp/site --catalog tests/catalog.sample.json
+          test -s /tmp/site/index.html && test -s /tmp/site/judge.js && test -s /tmp/site/catalog.json

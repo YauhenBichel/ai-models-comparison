@@ -1,0 +1,41 @@
+name: site
+
+# The page and the day's catalog as static files on GitHub Pages: no server, and no visitor asks Hugging Face
+# anything. Needs Pages enabled for this repository with "GitHub Actions" as the source.
+on:
+  schedule:
+    - cron: "40 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build the catalog and the page
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}    # optional: only raises the rate limit
+        run: uv run ai-models-comparison site --out public --days 60 --no-cache
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

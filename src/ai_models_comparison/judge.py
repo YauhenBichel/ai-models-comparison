@@ -10,6 +10,9 @@
   no GGUF yet       nothing to run with llama.cpp or Ollama today
 
 A verdict is about memory. It says nothing about whether the model is good; that is what your own tests are for.
+
+Judging is arithmetic on a catalog entry and two budgets: no network, no machine. The page in `web/judge.js`
+does the same arithmetic in the browser, and `tests/golden.json` holds the cases both must agree on.
 """
 from __future__ import annotations
 
@@ -17,10 +20,13 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from .hub import Build, Fetch, find_builds, parameters
+from .catalog import Entry
+from .hub import Build
 from .machine import Budgets
 
 ORDER = {"fits the GPU": 0, "fits in memory": 1, "low-bit only": 2, "too big": 3, "no GGUF yet": 4}
+NOTES = {"low-bit only": "under 3 bits a weight: measure it on your own tasks before trusting it",
+         "fits in memory": "part of the weights stay off the GPU: slower than a model that fits it"}
 
 
 @dataclass(slots=True)
@@ -35,12 +41,40 @@ class Judged:
     role: str = ""
     replaces: str = ""
     note: str = ""
+    licence: str = ""
+    context: int | None = None
+    downloads: int | None = None
+    likes: int | None = None
 
-    def to_dict(self) -> dict[str, Any]:
-        pick = None if self.pick is None else {"repo": self.pick.repo, "quant": self.pick.quant, "gb": round(self.pick.size / 1e9, 1)}
-        return {"model": self.model, "created": self.created, "kind": self.kind, "params_b": self.params_b,
-                "verdict": self.verdict, "pick": pick, "role": self.role, "replaces": self.replaces, "note": self.note,
-                "builds": [{"repo": b.repo, "quant": b.quant, "gb": round(b.size / 1e9, 1)} for b in self.builds]}
+    def _build(self, x: Build, b: Budgets | None) -> dict[str, Any]:
+        d: dict[str, Any] = {"repo": x.repo, "quant": x.quant, "gb": round(x.size / 1e9, 1), "bits": x.bits,
+                             "bits_per_weight": round(x.size * 8 / (self.params_b * 1e9), 2) if self.params_b else None}
+        if b is not None:
+            d["fits"] = "gpu" if x.size <= b.gpu else "memory" if x.size <= b.memory else "no"
+        return d
+
+    def to_dict(self, b: Budgets | None = None) -> dict[str, Any]:
+        """One model as every interface gives it. With the budgets, each build says where it fits."""
+        pick = None
+        if self.pick is not None:
+            pick = self._build(self.pick, b)
+            if self.verdict != "too big":
+                pick["get"] = f'hf download {self.pick.repo} --include "*{self.pick.quant}*"'
+                pick["run"] = f"llama-server -hf {self.pick.repo}:{self.pick.quant}"
+                if b is not None:
+                    room = (b.gpu if self.verdict == "fits the GPU" else b.memory) - self.pick.size
+                    pick["headroom_gb"] = round(room / 1e9, 1)
+        return {"model": self.model, "url": f"https://huggingface.co/{self.model}", "created": self.created, "kind": self.kind,
+                "params_b": self.params_b, "licence": self.licence, "context": self.context, "downloads": self.downloads,
+                "likes": self.likes, "verdict": self.verdict, "pick": pick, "role": self.role, "replaces": self.replaces,
+                "note": self.note, "builds": [self._build(x, b) for x in self.builds]}
+
+
+def _best(fitting: list[Build]) -> Build:
+    """The most bits that are worth having, then the larger file. Above 8 bits a weight nothing is gained: an
+    F16 of a small model is twice the memory of its Q8 for the same answers, so it is picked only when it is all there is."""
+    usual = [x for x in fitting if x.bits <= 8]
+    return max(usual, key=lambda x: (x.bits, x.size)) if usual else min(fitting, key=lambda x: x.size)
 
 
 def judge(builds: list[Build], b: Budgets, gpu_min_bits: float = 4, memory_min_bits: float = 3) -> tuple[str, Build | None]:
@@ -48,11 +82,10 @@ def judge(builds: list[Build], b: Budgets, gpu_min_bits: float = 4, memory_min_b
         return "no GGUF yet", None
     on_gpu = [x for x in builds if x.size <= b.gpu and x.bits >= gpu_min_bits]
     if on_gpu:
-        # between a huge F16 of a tiny model and a Q6 the difference is nothing: cap what "more bits" is worth
-        return "fits the GPU", max(on_gpu, key=lambda x: (min(x.bits, 6), x.size))
+        return "fits the GPU", _best(on_gpu)
     in_memory = [x for x in builds if x.size <= b.memory and x.bits >= memory_min_bits]
     if in_memory:
-        return "fits in memory", max(in_memory, key=lambda x: x.size)
+        return "fits in memory", _best(in_memory)
     low = [x for x in builds if x.size <= b.memory]
     if low:
         return "low-bit only", max(low, key=lambda x: x.size)
@@ -74,19 +107,12 @@ def role_of(model: str, kind: str) -> str:
     return "general"
 
 
-def judge_model(model: str, created: str, kind: str | None, fetch: Fetch, b: Budgets, roster: dict[str, str] | None = None,
-                quantizers: list[str] | None = None, gpu_min_bits: float = 4, memory_min_bits: float = 3) -> Judged:
-    params, page_kind = parameters(model, fetch)
-    kind = kind or page_kind or "text"
-    builds = find_builds(model, fetch, quantizers) if quantizers else find_builds(model, fetch)
-    if params:  # under 0.75 bits a weight is no build of this model: a helper file that slipped through
-        builds = [x for x in builds if x.size * 8 / (params * 1e9) >= 0.75]
-    j = Judged(model, created[:10], kind, params, builds)
-    j.verdict, j.pick = judge(builds, b, gpu_min_bits, memory_min_bits)
-    j.role = role_of(model, kind)
+def judge_entry(e: Entry, b: Budgets, roster: dict[str, str] | None = None, gpu_min_bits: float = 4,
+                memory_min_bits: float = 3) -> Judged:
+    j = Judged(e.model, e.created, e.kind, e.params_b, e.builds, licence=e.licence, context=e.context, downloads=e.downloads,
+               likes=e.likes)
+    j.verdict, j.pick = judge(e.builds, b, gpu_min_bits, memory_min_bits)
+    j.role = role_of(e.model, e.kind)
     j.replaces = (roster or {}).get(j.role, "")
-    if j.verdict == "low-bit only":
-        j.note = "under 3 bits a weight: measure it on your own tasks before trusting it"
-    elif j.verdict == "fits in memory":
-        j.note = "part of the weights stay off the GPU: slower than a model that fits it"
+    j.note = NOTES.get(j.verdict, "")
     return j

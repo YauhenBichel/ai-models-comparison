@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import json
+import urllib.error
+from email.message import Message
 from pathlib import Path
 from typing import Any
 
@@ -113,9 +115,14 @@ def fake_fetch(url: str) -> Any:
     if url.endswith("/models/unsloth/Qwen4-Coder-90B-GGUF/tree/main?recursive=true"):
         return tree(("Qwen4-Coder-90B-Q4_K_M.gguf", 54.0), ("Qwen4-Coder-90B-Q3_K_M.gguf", 42.0), ("Qwen4-Coder-90B-Q8_0.gguf", 95.0))
     if url.endswith("/models/Qwen/Qwen4-Coder-90B"):
-        return {"safetensors": {"total": 90_000_000_000}, "pipeline_tag": "text-generation"}
-    if url.endswith("/models/deepseek-ai/DeepSeek-V9"):
+        return {"safetensors": {"total": 90_000_000_000}, "pipeline_tag": "text-generation", "createdAt": "2026-09-20T00:00:00.000Z",
+                "cardData": {"license": "apache-2.0"}, "downloads": 12345, "likes": 67}
+    if url.endswith("/models/unsloth/Qwen4-Coder-90B-GGUF"):
+        return {"gguf": {"total": 89_900_000_000, "architecture": "qwen4", "context_length": 262144}, "cardData": {"license": "apache-2.0"}}
+    if url.endswith(("/models/deepseek-ai/DeepSeek-V9", "/models/Qwen/Old")):
         return {}
+    if url.endswith("/models/no/such"):
+        raise urllib.error.HTTPError(url, 404, "Not Found", Message(), None)
     raise AssertionError(url)
 
 
@@ -154,12 +161,13 @@ def test_judge_and_machine_commands(tmp_path: Path, capsys: pytest.CaptureFixtur
     assert cli.main(["judge", "Qwen/Qwen4-Coder-90B", "--gpu-gb", "24", "--ram-gb", "64"], fetch=fake_fetch) == 0
     out = capsys.readouterr().out
     assert "Qwen/Qwen4-Coder-90B (text, 90B weights): fits in memory" in out and "54.0 GB  Q4_K_M       memory  <- fits in memory" in out
+    assert "run: llama-server -hf unsloth/Qwen4-Coder-90B-GGUF:Q4_K_M" in out and "fits in memory up to 70.1 GiB" in out
     assert cli.main(["machine", "--gpu-gb", "24", "--ram-gb", "64", "--json"], fetch=fake_fetch) == 0
-    d = json.loads(capsys.readouterr().out)
+    d = json.loads(capsys.readouterr().out)["machine"]
     assert d["gpu_gib"] == 24.0 and d["fits_gpu_gib"] == 22.1 and d["fits_memory_gib"] == 70.1 and d["kind"] == "given"
     assert cli.main(["config"]) == 0 and "[roster]" in capsys.readouterr().out
-    with pytest.raises(SystemExit):
-        cli.main(["judge", "x/y", "--config", str(tmp_path / "missing.toml")], fetch=fake_fetch)
+    assert cli.main(["judge", "x/y", "--config", str(tmp_path / "missing.toml")], fetch=fake_fetch) == 1
+    assert "no such configuration file" in capsys.readouterr().err
 
 
 def test_report_marks_too_big_with_its_smallest_build() -> None:
