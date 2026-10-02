@@ -9,10 +9,12 @@ the amdgpu sysfs counters. Nothing is installed and nothing is written. Every fi
 from __future__ import annotations
 
 import glob
+import math
 import platform
 import subprocess
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, replace
+from typing import Any
 
 GIB = 2**30
 
@@ -95,6 +97,49 @@ def budgets(m: Machine, gpu_reserve_gib: float | None = None, ram_reserve_gib: f
     ram_reserve = int((ram_reserve_gib if ram_reserve_gib is not None else max(8.0, m.ram / GIB * 0.25)) * GIB)
     gpu = max(0, m.gpu - gpu_reserve)
     return Budgets(gpu, gpu + max(0, m.ram - ram_reserve), gpu_reserve, ram_reserve)
+
+
+SPEC = ("gpu_gb", "ram_gb", "unified", "gpu_reserve_gb", "ram_reserve_gb")   # how any interface describes a machine
+
+
+def _number(spec: Mapping[str, Any], key: str) -> float | None:
+    if spec.get(key) is None or spec[key] == "":
+        return None
+    try:
+        v = float(spec[key])
+    except (TypeError, ValueError):
+        raise ValueError(f"{key} must be a number of GiB") from None
+    if not math.isfinite(v) or v < 0 or v > 1_000_000:
+        raise ValueError(f"{key} must be between 0 and 1000000 GiB")
+    return v
+
+
+def resolve(spec: Mapping[str, Any], detected: Machine | None = None) -> tuple[Machine, Budgets]:
+    """The machine to judge for: the one detected, changed by what the spec gives. A machine given by hand is
+    two pools unless it says `unified`; with `unified` and only `ram_gb`, the GPU may use all of it."""
+    m = replace(detected) if detected is not None else detect()
+    gpu_gb, ram_gb = _number(spec, "gpu_gb"), _number(spec, "ram_gb")
+    if gpu_gb is not None or ram_gb is not None:
+        m.unified, m.kind, m.note = False, "given", "as given, not detected"
+    if gpu_gb is not None:
+        m.gpu = int(gpu_gb * GIB)
+    if ram_gb is not None:
+        m.ram = int(ram_gb * GIB)
+    unified = spec.get("unified")
+    if unified is not None and unified != "":
+        m.unified = unified if isinstance(unified, bool) else str(unified).lower() in ("1", "true", "yes", "on")
+        if m.unified and gpu_gb is None and ram_gb is not None:
+            m.gpu = m.ram
+    return m, budgets(m, _number(spec, "gpu_reserve_gb"), _number(spec, "ram_reserve_gb"))
+
+
+def as_dict(m: Machine, b: Budgets) -> dict[str, Any]:
+    def g(v: int) -> float:
+        return round(v / GIB, 1)
+
+    return {"ram_gib": g(m.ram), "gpu_gib": g(m.gpu), "kind": m.kind, "unified": m.unified, "note": m.note,
+            "fits_gpu_gib": g(b.gpu), "fits_memory_gib": g(b.memory), "gpu_reserve_gib": g(b.gpu_reserve),
+            "ram_reserve_gib": g(b.ram_reserve)}
 
 
 def describe(m: Machine, b: Budgets) -> str:

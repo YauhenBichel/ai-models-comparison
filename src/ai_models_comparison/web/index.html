@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>AI models comparison: which new open models fit your machine</title>
+<meta name="description" content="New open-weights AI models, each judged against your machine's GPU and system memory: fits the GPU, fits in memory, low-bit only, or too big.">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>AI models comparison</h1>
+    <p class="lede">New open-weights models, judged against the memory of <em>your</em> machine.</p>
+  </div>
+  <p class="meta" id="meta" aria-live="polite"></p>
+</header>
+
+<details class="howto" id="howto" open>
+  <summary>How to use this page</summary>
+  <ol>
+    <li><b>Describe your machine.</b> Choose a preset or type the GPU memory and the system memory. On a Mac with Apple silicon,
+      tick <i>one shared pool</i>. The list is judged again as you type.</li>
+    <li><b>Read the verdicts.</b> Click a model to see every build, where each fits, and the command to download and run the best one.</li>
+    <li><b>Compare.</b> Tick two to four models to see them side by side. The page address keeps your machine and your choice: copy it to share.</li>
+  </ol>
+  <dl class="verdicts">
+    <div><dt><span class="verdict v0"><span class="dot"></span>fits the GPU</span></dt><dd>a build of 4 bits or more fits your GPU: the fast way to run it</dd></div>
+    <div><dt><span class="verdict v1"><span class="dot"></span>fits in memory</span></dt><dd>a build of 3 bits or more fits GPU and system memory together: it runs, slower</dd></div>
+    <div><dt><span class="verdict v2"><span class="dot"></span>low-bit only</span></dt><dd>only builds under 3 bits fit: they lose quality, test before you trust them</dd></div>
+    <div><dt><span class="verdict v3"><span class="dot"></span>too big</span></dt><dd>no build fits this machine</dd></div>
+    <div><dt><span class="verdict v4"><span class="dot"></span>no GGUF yet</span></dt><dd>nothing to run with llama.cpp or Ollama today</dd></div>
+  </dl>
+</details>
+
+<section class="machine" aria-labelledby="machine-h">
+  <h2 id="machine-h">Your machine</h2>
+  <form id="machine" autocomplete="off">
+    <label>Preset
+      <select id="preset"></select>
+    </label>
+    <label><span>GPU memory <span class="unit">GiB</span></span>
+      <input id="gpu" type="number" min="0" max="100000" step="1" inputmode="decimal">
+    </label>
+    <label><span>System memory <span class="unit">GiB</span></span>
+      <input id="ram" type="number" min="0" max="100000" step="1" inputmode="decimal">
+    </label>
+    <label class="check"><input id="unified" type="checkbox"> one shared pool <span class="hint">(Apple silicon)</span></label>
+    <details>
+      <summary>Reserves</summary>
+      <label><span>Kept free on the GPU <span class="unit">GiB</span></span>
+        <input id="gpu-reserve" type="number" min="0" step="1" placeholder="auto">
+      </label>
+      <label><span>Kept free for the system <span class="unit">GiB</span></span>
+        <input id="ram-reserve" type="number" min="0" step="1" placeholder="auto">
+      </label>
+    </details>
+  </form>
+  <p class="budgets" id="budgets" aria-live="polite"></p>
+</section>
+
+<section id="analysis" hidden aria-labelledby="analysis-h">
+  <h2 id="analysis-h">Worth trying on this machine</h2>
+  <p class="hint">Role by role: the best that fits the GPU, then only what is larger and still runs. Open a role for the reasons and the
+    cautions. Ranks are weights after the cost of quantization: an ordering, not a benchmark.</p>
+  <div id="analysis-body" class="roles"></div>
+</section>
+
+<section class="compare" id="compare" hidden aria-labelledby="compare-h">
+  <div class="bar"><h2 id="compare-h">Side by side</h2><button type="button" id="compare-clear">Clear</button></div>
+  <div class="table-wrap"><table id="compare-table"></table></div>
+</section>
+
+<section aria-labelledby="models-h">
+  <div class="bar">
+    <h2 id="models-h">Models</h2>
+    <div class="chips" id="verdicts" role="group" aria-label="Show verdicts"></div>
+    <label class="inline">Kind
+      <select id="kind"><option value="">all</option><option>text</option><option>vision</option><option>embed</option><option>speech</option></select>
+    </label>
+    <label class="inline grow">Search
+      <input id="search" type="search" placeholder="name or publisher">
+    </label>
+  </div>
+  <form class="add" id="add" hidden>
+    <label class="grow">Judge any model
+      <input id="add-id" type="text" placeholder="org/Name or a Hugging Face address" spellcheck="false">
+    </label>
+    <button type="submit">Add</button>
+    <span class="hint" id="add-status" aria-live="polite"></span>
+  </form>
+  <p class="legend" id="legend"></p>
+  <div class="table-wrap">
+    <table id="models">
+      <thead><tr>
+        <th scope="col" class="pick"><span class="sr">Compare</span></th>
+        <th scope="col">Model</th>
+        <th scope="col" class="opt">Released</th>
+        <th scope="col" class="num opt">Weights</th>
+        <th scope="col">Verdict</th>
+        <th scope="col">Best build that fits</th>
+        <th scope="col" class="mem">Memory</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <p class="empty" id="empty" hidden></p>
+</section>
+
+<footer>
+  <p>A verdict is about memory only: a build's files against what your machine can hold. It does not say a model is good, and it does not
+  count the context cache. Sizes come from Hugging Face's public listing; nothing is downloaded.</p>
+  <p><a href="https://github.com/YauhenBichel/ai-models-comparison">ai-models-comparison</a> is open source (Apache-2.0).
+  The same answers are a command line, an HTTP API and an MCP server.</p>
+</footer>
+<script type="module" src="app.js"></script>
+</body>
+</html>

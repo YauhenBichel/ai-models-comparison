@@ -107,14 +107,43 @@ def find_builds(model: str, fetch: Fetch, quantizers: list[str] = QUANTIZERS) ->
     return []
 
 
-def parameters(model: str, fetch: Fetch) -> tuple[float | None, str | None]:
-    """(billions of weights, kind) from the model's own page; either may be unknown."""
+class NotFound(LookupError):
+    """Hugging Face has no such model (or it is private)."""
+
+
+def model_id(text: str) -> str:
+    """`org/Name` from what a person pastes: an id, a model page's address, with or without a trailing part."""
+    text = re.sub(r"^https?://(www\.)?(huggingface\.co|hf\.co)/", "", text.strip()).strip("/")
+    parts = text.split("/")
+    if len(parts) < 2 or not all(re.fullmatch(r"[\w.\-]+", x) for x in parts[:2]):
+        raise ValueError(f"not a Hugging Face model id: {text!r} (expected org/Name)")
+    return "/".join(parts[:2])
+
+
+def model_page(model: str, fetch: Fetch) -> dict[str, Any]:
+    """The model's own page as the API gives it; {} when it cannot be read; NotFound when it does not exist."""
     try:
         info = fetch(f"{API}/models/{model}")
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 404):
+            raise NotFound(model) from e
+        return {}
     except FetchError:
-        return None, None
-    total = (info.get("safetensors") or {}).get("total")
-    return (round(total / 1e9, 1) if total else None), KINDS.get(str(info.get("pipeline_tag") or ""))
+        return {}
+    return info if isinstance(info, dict) else {}
+
+
+def facts(info: dict[str, Any]) -> dict[str, Any]:
+    """What a model page says that is worth comparing: weights, kind, licence, context, popularity."""
+    card = info.get("cardData") or {}
+    gguf = info.get("gguf") or {}
+    total = (info.get("safetensors") or {}).get("total") or gguf.get("total")
+    licence = str(card.get("license") or "")
+    if licence in ("", "other"):
+        licence = str(card.get("license_name") or licence)
+    return {"params_b": round(total / 1e9, 1) if total else None, "kind": KINDS.get(str(info.get("pipeline_tag") or "")),
+            "licence": licence, "context": gguf.get("context_length"), "architecture": str(gguf.get("architecture") or ""),
+            "downloads": info.get("downloads"), "likes": info.get("likes"), "created": str(info.get("createdAt") or "")[:10]}
 
 
 def new_models(since: str, fetch: Fetch, publishers: list[str] = PUBLISHERS, kinds: set[str] | None = None,

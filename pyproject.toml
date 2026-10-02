@@ -1,13 +1,13 @@
 [project]
 name = "ai-models-comparison"
-version = "0.1.0"
+version = "0.2.0"
 description = "Compare new open-weights AI models with the machine you have: which fit it? Watches publishers on Hugging Face, sizes every GGUF build, and judges each against your GPU and system memory. Downloads nothing."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Yauhen Bichel" }]
 requires-python = ">=3.11"
-keywords = ["llm", "gguf", "hugging-face", "llama.cpp", "ollama", "self-hosted", "open-weights", "local-llm"]
+keywords = ["llm", "gguf", "hugging-face", "llama.cpp", "ollama", "self-hosted", "open-weights", "local-llm", "mcp"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
