@@ -39,7 +39,7 @@ class Build:
 
 
 def http_json(url: str) -> Any:
-    headers = {"user-agent": "fits-here/0"}
+    headers = {"user-agent": "ai-models-comparison/0"}
     token = os.environ.get("HF_TOKEN")  # optional, for rate limits; never printed
     if token:
         headers["authorization"] = f"Bearer {token}"

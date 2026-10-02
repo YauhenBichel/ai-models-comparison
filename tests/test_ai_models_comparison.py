@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from fits_here import cli, hub, judge, machine, report
+from ai_models_comparison import cli, hub, judge, machine, report
 
 GB = 10**9
 GIB = 2**30
