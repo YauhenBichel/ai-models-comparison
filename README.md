@@ -130,7 +130,7 @@ Issues and pull requests are welcome: a machine it detects wrongly (paste `ai-mo
 a model whose builds it misses, a publisher worth watching by default.
 
 ```bash
-uv run ruff check . && uv run mypy && uv run pytest -q && node --test tests/     # no network, no GPU
+uv run ruff check . && uv run mypy && uv run pytest -q && node --test tests/judge.test.mjs     # no network, no GPU
 ```
 
 ## Licence

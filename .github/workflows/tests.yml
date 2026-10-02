@@ -24,7 +24,7 @@ jobs:
           uv run --python ${{ matrix.python }} mypy
           uv run --python ${{ matrix.python }} pytest -q
       - name: The browser's judge agrees with Python's (golden cases)
-        run: node --test tests/
+        run: node --test tests/judge.test.mjs
       - name: The command runs from a built wheel
         run: |
           uv build --wheel

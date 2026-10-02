@@ -1,6 +1,6 @@
 // Copyright 2026 Yauhen Bichel
 // SPDX-License-Identifier: Apache-2.0
-// The browser's judge against the cases the Python judge produced: `node --test tests/`.
+// The browser's judge against the cases the Python judge produced: `node --test tests/judge.test.mjs`.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
