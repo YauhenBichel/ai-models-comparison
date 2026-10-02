@@ -1,0 +1,30 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Lint, types, tests (no network)
+        run: |
+          uv run --python ${{ matrix.python }} ruff check .
+          uv run --python ${{ matrix.python }} mypy
+          uv run --python ${{ matrix.python }} pytest -q
+      - name: The command runs from a built wheel
+        run: |
+          uv build --wheel
+          uvx --from dist/*.whl fits-here --version
+          uvx --from dist/*.whl fits-here machine
