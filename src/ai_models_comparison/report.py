@@ -27,8 +27,9 @@ def counts(judged: list[Judged]) -> str:
 
 def markdown(judged: list[Judged], since: str, m: Machine, b: Budgets, today: str, roster: dict[str, str] | None = None) -> str:
     lines = [f"# Open-weights models since {since}, judged for this machine", "",
-             f"Generated {today} by [fits-here](https://github.com/YauhenBichel/fits-here). This machine: {m.ram / GIB:.0f} GiB of "
-             f"system memory, {m.gpu / GIB:.0f} GiB of GPU memory ({m.kind}{', unified' if m.unified else ''}). Budgets: "
+             f"Generated {today} by [ai-models-comparison](https://github.com/YauhenBichel/ai-models-comparison). "
+             f"This machine: {m.ram / GIB:.0f} GiB of system memory, {m.gpu / GIB:.0f} GiB of GPU memory "
+             f"({m.kind}{', unified' if m.unified else ''}). Budgets: "
              f"{b.gpu / GIB:.0f} GiB of weights on the GPU, {b.memory / GIB:.0f} GiB in memory. Nothing was downloaded.", ""]
     if roster:
         lines += ["In use today: " + ", ".join(f"{r} = `{name}`" for r, name in sorted(roster.items())) + ".", ""]

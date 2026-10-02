@@ -1,22 +1,22 @@
-# fits-here
+# ai-models-comparison
 
-**Which new open-weights models fit this machine?**
+**Compare new open-weights AI models with the machine you have: which of them fit it?**
 
 New models appear every week, and each comes in a dozen builds from 20 GB to 400 GB. The question for
 anyone who runs models at home or on one server is always the same: *is there a build of this that fits my
 GPU, or at least my memory, and is it a real build or a 1-bit one?* Answering it by hand means opening the
 model page, finding a GGUF repository, adding up shards and comparing with what the machine has.
 
-`fits-here` does that for you, for every new model of the publishers you watch:
+`ai-models-comparison` does that for you, for every new model of the publishers you watch:
 
 ```console
-$ fits-here machine
+$ ai-models-comparison machine
 system memory   62.4 GiB
 GPU memory      64.0 GiB  (amd)
 fits the GPU    up to 58.9 GiB of weights
 fits in memory  up to 105.7 GiB of weights (GPU and system memory together)
 
-$ fits-here judge deepseek-ai/DeepSeek-V4-Flash-0731 Qwen/Qwen3.8-Flash-Next
+$ ai-models-comparison judge deepseek-ai/DeepSeek-V4-Flash-0731 Qwen/Qwen3.8-Flash-Next
 deepseek-ai/DeepSeek-V4-Flash-0731 (text, 304.2B weights): low-bit only
       82.5 GB  UD-IQ1_S     memory
       96.8 GB  UD-Q2_K_XL   memory  <- low-bit only
@@ -28,7 +28,7 @@ Qwen/Qwen3.8-Flash-Next (vision, 180B weights): fits in memory
       93.7 GB  UD-IQ4_XS    memory  <- fits in memory
      111.3 GB  UD-Q4_K_XL   no
 
-$ fits-here new --days 45
+$ ai-models-comparison new --days 45
 # Open-weights models since 2026-08-18, judged for this machine
 | Model | Released | Kind | Weights | Verdict | Best build that fits | Role | Would replace | Note |
 ...
@@ -40,7 +40,7 @@ Standard library only.
 ## Install
 
 ```bash
-pip install fits-here        # or: uv tool install fits-here, or run once with: uvx fits-here machine
+pip install ai-models-comparison        # or: uv tool install ai-models-comparison, or run once with: uvx ai-models-comparison machine
 ```
 
 Python 3.11 or newer. Linux and macOS.
@@ -75,8 +75,8 @@ your own tests are for.
 ## A daily review
 
 ```bash
-fits-here config > ~/.config/fits-here/config.toml     # then edit: publishers, reserves, your roster, a notify URL
-fits-here new --state ~/.local/state/fits-here.json --out ~/reports/models --html ~/public/models.html --quiet
+ai-models-comparison config > ~/.config/ai-models-comparison/config.toml     # then edit: publishers, reserves, your roster, a notify URL
+ai-models-comparison new --state ~/.local/state/ai-models-comparison.json --out ~/reports/models --html ~/public/models.html --quiet
 ```
 
 With `--state`, a run remembers what it has seen. With `notify` in the configuration (an [ntfy](https://ntfy.sh)
@@ -84,12 +84,12 @@ topic URL or any endpoint that takes a POST), a model that newly fits is one lin
 run fills the state and stays quiet. A systemd timer:
 
 ```ini
-# ~/.config/systemd/user/fits-here.service
+# ~/.config/systemd/user/ai-models-comparison.service
 [Service]
 Type=oneshot
-ExecStart=%h/.local/bin/fits-here new --state %h/.local/state/fits-here.json --out %h/reports/models --quiet
+ExecStart=%h/.local/bin/ai-models-comparison new --state %h/.local/state/ai-models-comparison.json --out %h/reports/models --quiet
 
-# ~/.config/systemd/user/fits-here.timer
+# ~/.config/systemd/user/ai-models-comparison.timer
 [Timer]
 OnCalendar=*-*-* 07:10
 Persistent=true
@@ -124,7 +124,7 @@ weight is dropped: it is something else that slipped through.
 
 ## Contributing
 
-Issues and pull requests are welcome: a machine it detects wrongly (paste `fits-here machine --json`), a
+Issues and pull requests are welcome: a machine it detects wrongly (paste `ai-models-comparison machine --json`), a
 model whose builds it misses, a publisher worth watching by default.
 
 ```bash

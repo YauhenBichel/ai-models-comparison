@@ -1,11 +1,11 @@
 # Copyright 2026 Yauhen Bichel
 # SPDX-License-Identifier: Apache-2.0
-"""fits-here: which new open-weights models fit this machine?
+"""ai-models-comparison: which new open-weights models fit this machine?
 
-  fits-here machine                      what this machine has, and the budgets that follow
-  fits-here judge MODEL [MODEL ...]      one model: its builds, and the best that fits here
-  fits-here new [--days 45]              the watched publishers' new models, each judged; a report
-  fits-here config                       an example configuration file
+  ai-models-comparison machine                      what this machine has, and the budgets that follow
+  ai-models-comparison judge MODEL [MODEL ...]      one model: its builds, and the best that fits here
+  ai-models-comparison new [--days 45]              the watched publishers' new models, each judged; a report
+  ai-models-comparison config                       an example configuration file
 
 Nothing is downloaded but JSON from Hugging Face's public API, and nothing touches the GPU.
 """
@@ -29,8 +29,8 @@ from .judge import Judged, judge_model
 from .machine import GIB, Budgets, Machine, budgets, describe, detect
 from .report import markdown, page
 
-CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "fits-here" / "config.toml"
-EXAMPLE = '''# fits-here configuration. Every key is optional.
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "ai-models-comparison" / "config.toml"
+EXAMPLE = '''# ai-models-comparison configuration. Every key is optional.
 # publishers = ["deepseek-ai", "Qwen", "google", "mistralai"]   # whose new models to judge (default: about twenty)
 # quantizers = ["unsloth", "bartowski"]                          # whose GGUF builds to prefer
 # kinds = ["text", "vision"]                                     # of: text, vision, embed, speech
@@ -41,7 +41,7 @@ EXAMPLE = '''# fits-here configuration. Every key is optional.
 # ram_reserve_gb = 16    # kept free for the system
 # gpu_min_bits = 4       # a build under this is not called "fits the GPU"
 # memory_min_bits = 3    # a build under this is "low-bit only"
-# notify = "https://ntfy.sh/your-topic"   # one line there when a new model fits; or the FITS_HERE_NOTIFY variable
+# notify = "https://ntfy.sh/your-topic"   # one line there when a new model fits; or the AI_MODELS_COMPARISON_NOTIFY variable
 
 # [roster]               # what you run today, by role: the report says what a new model would replace
 # coder = "qwen3-coder-next"
@@ -55,7 +55,7 @@ def load_config(path: str | None) -> dict[str, Any]:
     p = Path(path) if path else CONFIG
     if not p.is_file():
         if path:
-            raise SystemExit(f"fits-here: no such configuration file: {path}")
+            raise SystemExit(f"ai-models-comparison: no such configuration file: {path}")
         return {}
     with open(p, "rb") as fh:
         return tomllib.load(fh)
@@ -83,9 +83,10 @@ def machine_and_budgets(cfg: dict[str, Any], a: argparse.Namespace) -> tuple[Mac
 
 def notify(url: str, text: str) -> None:
     try:
-        urllib.request.urlopen(urllib.request.Request(url, data=text.encode(), headers={"Title": "fits-here: new models"}), timeout=15).read()  # noqa: S310
+        req = urllib.request.Request(url, data=text.encode(), headers={"Title": "ai-models-comparison: new models"})
+        urllib.request.urlopen(req, timeout=15).read()  # noqa: S310
     except (OSError, urllib.error.URLError):
-        print("fits-here: the notification could not be sent", file=sys.stderr)
+        print("ai-models-comparison: the notification could not be sent", file=sys.stderr)
 
 
 def write_atomic(path: Path, text: str) -> None:
@@ -139,8 +140,8 @@ def cmd_new(a: argparse.Namespace, cfg: dict[str, Any], fetch: Fetch) -> int:
     publishers = a.publisher or cfg.get("publishers") or PUBLISHERS
     kinds = set(a.kind or cfg.get("kinds") or []) or None
     if kinds and not kinds <= set(KINDS.values()):
-        raise SystemExit(f"fits-here: kinds are {sorted(set(KINDS.values()))}")
-    found = new_models(since, fetch, publishers, kinds, on_error=lambda org, e: print(f"fits-here: {org}: {e}", file=sys.stderr))
+        raise SystemExit(f"ai-models-comparison: kinds are {sorted(set(KINDS.values()))}")
+    found = new_models(since, fetch, publishers, kinds, on_error=lambda org, e: print(f"ai-models-comparison: {org}: {e}", file=sys.stderr))
     judged: list[Judged] = [judge_model(mid, created, kind, fetch, b, **_judge_kwargs(cfg)) for mid, created, kind in found]
     state: dict[str, Any] = {"seen": {}}
     if a.state:
@@ -158,7 +159,7 @@ def cmd_new(a: argparse.Namespace, cfg: dict[str, Any], fetch: Fetch) -> int:
         write_atomic(Path(a.state), json.dumps({"time": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "since": since,
                                                  "seen": {**state.get("seen", {}), **{j.model: j.verdict for j in judged}},
                                                  "fresh": [j.to_dict() for j in fresh]}, indent=1))
-    url = cfg.get("notify") or os.environ.get("FITS_HERE_NOTIFY")
+    url = cfg.get("notify") or os.environ.get("AI_MODELS_COMPARISON_NOTIFY")
     if url and fresh and a.state and not first_run:
         notify(url, "; ".join(f"{j.model} ({j.verdict}, {j.pick.quant} {j.pick.size / 1e9:.0f} GB, {j.role})" for j in fresh[:4] if j.pick))
     if a.json:
@@ -171,9 +172,9 @@ def cmd_new(a: argparse.Namespace, cfg: dict[str, Any], fetch: Fetch) -> int:
 
 
 def main(argv: list[str] | None = None, fetch: Fetch = http_json) -> int:
-    ap = argparse.ArgumentParser(prog="fits-here", description=__doc__.splitlines()[0], epilog="\n".join(__doc__.splitlines()[2:]),
+    ap = argparse.ArgumentParser(prog="ai-models-comparison", description=__doc__.splitlines()[0], epilog="\n".join(__doc__.splitlines()[2:]),
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--version", action="version", version=f"fits-here {__version__}")
+    ap.add_argument("--version", action="version", version=f"ai-models-comparison {__version__}")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--config", help=f"a TOML file (default {CONFIG}, if it exists)")
     common.add_argument("--gpu-gb", type=float, help="GPU memory in GiB, instead of what was detected")

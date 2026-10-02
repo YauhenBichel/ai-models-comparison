@@ -26,5 +26,5 @@ jobs:
       - name: The command runs from a built wheel
         run: |
           uv build --wheel
-          uvx --from dist/*.whl fits-here --version
-          uvx --from dist/*.whl fits-here machine
+          uvx --from dist/*.whl ai-models-comparison --version
+          uvx --from dist/*.whl ai-models-comparison machine
