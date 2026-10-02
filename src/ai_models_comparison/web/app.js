@@ -216,7 +216,10 @@ function render() {
   if (state.served) state.timer = setTimeout(analysis, 350);
 }
 async function analysis() {
-  const m = state.machine, p = new URLSearchParams();
+  // the reserves are sent as the page computed them, so the analysis and the table use the same budgets
+  const b = budgets(state.machine), p = new URLSearchParams();
+  const m = { ...state.machine, gpu_reserve_gb: b.gpu_reserve / GIB, ram_reserve_gb: b.ram_reserve / GIB };
+  if (m.unified) delete m.gpu_reserve_gb;
   for (const [k, v] of Object.entries(m)) if (v !== undefined && v !== false) p.set(k, v);
   const key = p.toString();
   if (key === state.analysed) return;
@@ -276,7 +279,9 @@ async function start() {
   try {
     const d = (await api("api/v1/machine")).machine;        // a local server: it knows this machine
     state.served = true;
-    state.detected = { gpu_gb: d.unified ? undefined : d.gpu_gib, ram_gb: d.ram_gib, unified: d.unified };
+    // the server's own reserves come with its machine: the page and the server must judge it alike
+    state.detected = { gpu_gb: d.unified ? undefined : d.gpu_gib, ram_gb: d.ram_gib, unified: d.unified,
+      gpu_reserve_gb: d.unified ? undefined : d.gpu_reserve_gib, ram_reserve_gb: d.ram_reserve_gib };
   } catch { /* a static host: the visitor describes the machine */ }
   state.machine = fromHash || (state.served ? { ...state.detected } : stored()) || state.machine;
   setupForm(); fillForm();

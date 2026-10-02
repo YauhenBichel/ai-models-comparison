@@ -204,7 +204,8 @@ def get(url: str, headers: dict[str, str] | None = None) -> tuple[int, Any, Any]
 
 def test_the_api_answers_for_any_machine_and_says_what_was_wrong(base: str) -> None:
     assert get(f"{base}/healthz")[1]["ok"] is True
-    assert get(f"{base}/api/v1/machine")[1]["machine"]["gpu_gib"] == 64.0
+    here = get(f"{base}/api/v1/machine")[1]["machine"]
+    assert here["gpu_gib"] == 64.0 and here["gpu_reserve_gib"] > 0 and here["ram_reserve_gib"] > 0   # the page judges with these
     status, body, _ = get(f"{base}/api/v1/models?id={CODER}&gpu_gb=24&ram_gb=64")
     assert status == 200 and body["models"][0]["verdict"] == "fits in memory" and body["machine"]["fits_gpu_gib"] == 22.1
     status, body, _ = get(f"{base}/api/v1/new?since=2026-09-01&verdict=fits%20the%20GPU")
