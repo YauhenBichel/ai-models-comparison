@@ -50,6 +50,40 @@ shows seven real questions answered on a home server: a bigger model than the on
 what a memory upgrade would buy, a daily notification, a guarded download, an agent on a laptop asking about
 the server.
 
+## Use with other MCP clients (Grok Build, Cursor, any MCP client)
+
+`ai-models-comparison mcp` is an MCP server over stdio with four read-only tools. It is not on PyPI, so `uvx` takes
+it from GitHub. In `.mcp.json`, `.cursor/mcp.json` or the client's own server list:
+
+```json
+{
+  "mcpServers": {
+    "ai-models-comparison": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/YauhenBichel/ai-models-comparison", "ai-models-comparison", "mcp"]
+    }
+  }
+}
+```
+
+If you ran `uv tool install`, use `"command": "ai-models-comparison", "args": ["mcp"]` instead.
+
+Grok Build (xAI) reads `~/.grok/config.toml`, or `.grok/config.toml` in a project:
+
+```toml
+[mcp_servers.ai-models-comparison]
+command = "uvx"
+args = ["--from", "git+https://github.com/YauhenBichel/ai-models-comparison", "ai-models-comparison", "mcp"]
+```
+
+or in one line: `grok mcp add ai-models-comparison -- uvx --from git+https://github.com/YauhenBichel/ai-models-comparison ai-models-comparison mcp`.
+Grok Build also reads `.mcp.json` and `.cursor/mcp.json`, so the JSON above works there too.
+
+Models without MCP support (for example Meta's Muse Spark, whose API offers function calling) can use these tools
+through an MCP-to-function-calling bridge; llm-harness provides one, see llm-harness's README.
+
+Tested with Claude Code. The Grok Build block follows xAI's documentation and has not been run.
+
 ## What it looks like
 
 ```console
