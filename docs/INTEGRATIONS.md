@@ -30,9 +30,28 @@ Every door returns this envelope. `schema` is 1; keys may be added, and it chang
     "builds": [{"repo": "...", "quant": "Q4_K_M", "gb": 9.0, "bits": 4.0, "bits_per_weight": 4.86, "fits": "gpu"}],
     "note": "", "replaces": ""
   }],
-  "errors": [{"model": "no/such", "error": "Hugging Face has no such model, or it is private or gated"}]
+  "errors": [{"model": "no/such", "code": "not_found", "error": "Hugging Face has no such model, or it is private or gated"}]
 }
 ```
+
+**A partial answer says so.** When some of the questions to Hugging Face failed, or the time allowed ran out,
+the answer (and a catalog file built then) carries one more key, absent from a whole answer:
+
+```json
+"incomplete": {"failed": 3, "of": 116, "cause": "HTTP 503 Service Unavailable", "out_of_time": false,
+               "publishers": ["google"], "models": ["Qwen/Qwen3-Coder-Next"]}
+```
+
+`publishers` were not read at all and `models` were found but could not be judged; neither appears in
+`models`, and neither is a "no GGUF yet". The text forms carry the same as a line that starts `incomplete:`.
+When every question failed there is no answer at all: an MCP tool result with `isError: true`, HTTP 502 with
+`{"error": {"code": "hub_unreachable"}}`, exit status 1 on the command line, each with the cause.
+
+An entry of `errors` has a `code`: `not_found`, `invalid` (not an `org/Name` id; nothing was asked for it) or
+`lookup_failed`. Its `model` is what was sent, cut to 120 characters.
+
+`machine.kind` is `unknown` when this machine's memory could not be detected; nothing is judged for it until
+`gpu_gb` and `ram_gb` are given, and `machine.warning` says so (it is `""` when detection assumed nothing).
 
 `verdict` is one of `fits the GPU`, `fits in memory`, `low-bit only`, `too big`, `no GGUF yet`. The analysis
 returns `roles` instead of `models`: each role has `summary`, `in_use`, `candidates` (a model as above plus
@@ -78,6 +97,14 @@ GB card?", "compare these three models for a Mac with 64 GB".
 The server speaks protocol revision 2026-07-28 (no handshake; `server/discover`) and the older revisions that
 open with `initialize`, from the same process. It writes nothing but protocol messages to standard output.
 
+Arguments are checked against each tool's `inputSchema` before anything is asked: a value outside it comes
+back as a tool result with `isError: true` that names the argument; only an unknown tool name is a protocol
+error (-32602). Tool calls are answered one at a time, in the order they arrive. `ping`, `tools/list` and the
+handshake are answered at once, also while a call is still asking Hugging Face, so their responses can
+overtake an earlier call's. A call that takes longer than the deadline (60 seconds; `--deadline`) is answered
+with what is known, marked `incomplete`. No failure ends the process: an unexpected one is an `isError`
+result, with its trace on standard error.
+
 An agent **skill** that teaches the command line instead is in
 [`skills/ai-models-comparison/SKILL.md`](../skills/ai-models-comparison/SKILL.md): copy the folder into your
 agent's skills directory.
@@ -119,7 +146,7 @@ curl 'http://localhost:8377/api/v1/models?id=Qwen/Qwen3-Coder-Next&gpu_gb=24&ram
 ```
 
 Errors are `{"error": {"code", "message"}}` with status 400 (the request was wrong, the message says how),
-401, 403, 404 or 502 (Hugging Face unreachable).
+401, 403, 404, 500 (a catalog that cannot be read) or 502 (Hugging Face unreachable).
 
 **Beyond your own machine.** The server listens on `127.0.0.1` and refuses requests that reach it under
 another host name. To serve a network, a token is required: `serve --host 0.0.0.0 --token SECRET`, and clients

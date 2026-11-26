@@ -288,7 +288,7 @@ def test_mcp_tools_give_a_short_text_and_the_full_answer() -> None:
     assert "Qwen/Qwen4-Coder-90B (text, 90B weights): fits in memory" in one["content"][0]["text"]
     two = call("judge_models", models=[CODER, "deepseek-ai/DeepSeek-V9"])["content"][0]["text"]
     assert "verdict        fits the GPU     no GGUF yet" in two and "context        256k             -\n" in two
-    new = call("new_models", days=400, verdicts=["fits the GPU"])
+    new = call("new_models", days=365, verdicts=["fits the GPU"])
     assert len(new["structuredContent"]["models"]) <= 1 and new["content"][0]["text"].startswith("machine: 64 GiB GPU")
     assert "fits the GPU up to" in call("machine")["content"][0]["text"]
     wrong = call("judge_models", models="Qwen")

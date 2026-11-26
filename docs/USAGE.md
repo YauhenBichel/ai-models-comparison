@@ -33,6 +33,15 @@ The two "fits" lines are the budgets every verdict uses. The reserves are what s
 cache and the rest of the system. If they are wrong for you (a server that does nothing else can keep less),
 set them: `--gpu-reserve-gb 1 --ram-reserve-gb 8`, or put them in the configuration file once (section 8).
 
+When the memory cannot be read (no `/proc/meminfo` and no POSIX figure, a `sysctl` that fails), the machine
+is reported as `unknown` and no model is judged until you give `--gpu-gb` and `--ram-gb` (or `gpu_gb` and
+`ram_gb` in the file `--config` names): a verdict against 0 GiB would be "too big" for everything, and false.
+A `warning` line says what detection had to assume: an NVIDIA GPU for which `nvidia-smi` reports no memory
+(`[N/A]`: an integrated GPU, as in a DGX Spark or a Jetson) is taken to share system memory; an `nvidia-smi`
+that is installed but fails is said to have failed, not taken for "no GPU"; on Windows system memory is read,
+and only NVIDIA GPUs are detected. To judge for a machine other than this one, see
+[Judging for another machine](../README.md#judging-for-another-machine).
+
 ## 2. Does this model fit?
 
 Give a Hugging Face id, or paste the model page's address:
@@ -205,6 +214,13 @@ coder = "Qwen/Qwen3-Coder-Next"
 general = "openai/gpt-oss-120b"
 ```
 
+`deadline = 60` (or `--deadline 60`) is how many seconds one question may spend asking Hugging Face before it
+is answered with what is known so far, marked incomplete. The default is 60 for `serve` and `mcp`, and none
+for the other commands, so a daily `site` or `new` run on a slow link is not cut short; 0 means none.
+
+One environment variable moves the hub: `HF_ENDPOINT=https://hub.example.org` asks a mirror instead of
+`https://huggingface.co` (the name Hugging Face's own tools read; `/api` is added to it).
+
 ## When something is wrong
 
 | You see | It means | Do |
@@ -214,3 +230,8 @@ general = "openai/gpt-oss-120b"
 | the wrong GPU memory | detection read another device, or a shared pool | set `--gpu-gb` / `--ram-gb`, and please open an issue with `machine --json` |
 | HTTP 429 from Hugging Face | more than about 500 questions in five minutes | wait five minutes; answers are cached for six hours; `HF_TOKEN` raises the limit |
 | old answers | the cache | `--no-cache` asks again |
+| `Hugging Face could not be reached: 5 of 5 lookups failed (...)` | every question to Hugging Face failed; the cause is in the brackets | check the network (and `HF_ENDPOINT`, if set); nothing was judged, and no model is "too big" or without builds because of it |
+| `incomplete: 3 of 116 lookups of Hugging Face failed (...)` | part of the answer is missing: the publishers and models named after it were not read | what is listed is true; ask again for the rest (what was answered is cached). With `the time allowed ... ran out`, raise `--deadline` |
+| `machine: unknown` | this machine's memory could not be detected | give `--gpu-gb` and `--ram-gb`, or `gpu_gb` and `ram_gb` in the file `--config` names |
+| `the catalog ... could not be read` / `is not valid JSON` | the file or address given as `--catalog` (or `catalog` in the configuration) is wrong; Hugging Face was not asked | fix the path or address the message names |
+| `invalid argument ...` from an MCP tool | an argument is outside what the tool declares (`days` 1 to 365, `limit` 1 to 200, ids as `org/Name`) | send the value the message asks for |

@@ -27,6 +27,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from . import __version__
+from .hub import Unreachable
 from .judge import ORDER
 from .machine import SPEC
 from .service import MAX_MODELS, SCHEMA, Service
@@ -85,10 +86,13 @@ def openapi() -> dict[str, Any]:
         "builds": {"type": "array", "items": build}}}
     mach = {"type": "object", "properties": {k: {"type": "number"} for k in (
         "ram_gib", "gpu_gib", "fits_gpu_gib", "fits_memory_gib", "gpu_reserve_gib", "ram_reserve_gib")} | {
-            "kind": {"type": "string"}, "unified": {"type": "boolean"}, "note": {"type": "string"}}}
+            "kind": {"type": "string"}, "unified": {"type": "boolean"}, "note": {"type": "string"}, "warning": {"type": "string"}}}
     answer = {"type": "object", "required": ["schema", "machine"], "properties": {
         "schema": {"type": "integer", "const": SCHEMA}, "machine": mach, "models": {"type": "array", "items": model},
         "errors": {"type": "array", "items": {"type": "object"}}, "counts": {"type": "object"}, "since": {"type": "string"},
+        "incomplete": {"type": "object", "description": "present only when lookups of Hugging Face failed: what is listed is true, "
+                       "what is missing is not known", "properties": {"failed": {"type": "integer"}, "of": {"type": "integer"},
+                                                                      "cause": {"type": "string"}, "out_of_time": {"type": "boolean"}}},
         "generated": {"type": "string"}}}
 
     def get(summary: str, params: list[dict[str, Any]], schema: dict[str, Any], op: str) -> dict[str, Any]:
@@ -193,6 +197,10 @@ def make_handler(service: Service, opts: Options) -> type[BaseHTTPRequestHandler
             def integer(name: str, default: int | None = None) -> int | None:
                 return int(query[name][0]) if query.get(name) else default
 
+            def days() -> int:
+                given = integer("days")
+                return 45 if given is None else given   # 0 is refused by the service, not taken for "not given"
+
             spec = {k: one(k) for k in SPEC}
             try:
                 if path == "/api/v1/machine":
@@ -200,23 +208,27 @@ def make_handler(service: Service, opts: Options) -> type[BaseHTTPRequestHandler
                 if path == "/api/v1/models":
                     return self.json(200, service.models(many("id", "ids"), spec), {"Cache-Control": "max-age=300"})
                 if path == "/api/v1/new":
-                    return self.json(200, service.new(spec, integer("days", 45) or 45, one("since"), many("publisher") or None,
+                    return self.json(200, service.new(spec, days(), one("since"), many("publisher") or None,
                                                       many("kind") or None, many("verdict") or None, integer("limit")),
                                      {"Cache-Control": "max-age=300"})
                 if path == "/api/v1/analyze":
-                    return self.json(200, service.analyze(spec, many("id", "ids") or None, integer("days", 45) or 45, one("since"),
+                    return self.json(200, service.analyze(spec, many("id", "ids") or None, days(), one("since"),
                                                           many("publisher") or None, many("kind") or None, integer("top", 3) or 3),
                                      {"Cache-Control": "max-age=300"})
                 if path == "/api/v1/catalog":
                     if many("id", "ids"):
                         entries, errors = service.entries(many("id", "ids"))
                         return self.json(200, {"schema": SCHEMA, "models": [e.to_dict() for e in entries], "errors": errors})
-                    c = service.catalog(integer("days", 45) or 45, one("since"), many("publisher") or None, many("kind") or None)
+                    c = service.catalog(days(), one("since"), many("publisher") or None, many("kind") or None)
                     return self.json(200, c.to_dict(), {"Cache-Control": "max-age=300"})
             except ValueError as e:
                 return self.error(400, "bad_request", str(e))
-            except OSError as e:
-                return self.error(502, "hub_unreachable", f"Hugging Face could not be reached: {e}")
+            except Unreachable as e:
+                return self.error(502, "hub_unreachable", str(e))
+            except OSError as e:   # a catalog that could not be read: the message names it
+                return self.error(500, "failed", str(e))
+            except OverflowError:
+                return self.error(400, "bad_request", "a number is out of range")
             return self.error(404, "not_found", "see /openapi.json for what this server answers")
 
     return Handler
