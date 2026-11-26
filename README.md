@@ -145,6 +145,29 @@ Every figure can be set: `--gpu-gb`, `--ram-gb`, `--unified`, `--gpu-reserve-gb`
 same keys in the configuration file (`ai-models-comparison config` prints an example). The reserves are what
 you keep free for the context cache and the rest of the machine; the defaults are cautious.
 
+## Judging for another machine
+
+To ask about a machine other than the one you sit at (a server in another room, a rented GPU), run the tool
+**here** and tell it that machine's memory. A verdict is arithmetic on two numbers, so nothing has to run on
+the other machine, and no connection to it can stall the answer.
+
+```toml
+# ~/.config/ai-models-comparison/server.toml: the machine to judge for, not the one this runs on
+gpu_gb = 24          # GPU memory, GiB
+ram_gb = 64          # system memory, GiB
+# unified = true     # when GPU and system memory are one pool (Apple silicon, an APU, a DGX Spark)
+```
+
+```bash
+ai-models-comparison new --config ~/.config/ai-models-comparison/server.toml
+claude mcp add server-models -- ai-models-comparison mcp --config ~/.config/ai-models-comparison/server.toml
+```
+
+Read the two numbers once on that machine with `ai-models-comparison machine`. For a single question,
+`--gpu-gb 24 --ram-gb 64` does the same, and an agent can pass `gpu_gb` and `ram_gb` with any tool call.
+Starting the MCP server on the other machine through `ssh` also works, but every tool call then waits on
+that link, and on a poor one the calls hang; the local server with `--config` has no link to wait on.
+
 ## How it is built
 
 One core, four thin interfaces. A **catalog** holds what does not depend on any machine (each model's builds

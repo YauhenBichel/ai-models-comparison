@@ -20,8 +20,30 @@ def _ctx(n: int | None) -> str:
 
 def text_machine(answer: dict[str, Any]) -> str:
     m = answer["machine"]
-    return (f"machine: {m['gpu_gib']:g} GiB GPU, {m['ram_gib']:g} GiB system memory ({m['kind']}{', unified' if m['unified'] else ''}); "
-            f"fits the GPU up to {m['fits_gpu_gib']:g} GiB of weights, fits in memory up to {m['fits_memory_gib']:g} GiB")
+    warning = m.get("warning") or ""
+    if m["kind"] == "unknown":
+        text = f"machine: unknown: {warning}"
+    else:
+        text = (f"machine: {m['gpu_gib']:g} GiB GPU, {m['ram_gib']:g} GiB system memory ({m['kind']}{', unified' if m['unified'] else ''}); "
+                f"fits the GPU up to {m['fits_gpu_gib']:g} GiB of weights, fits in memory up to {m['fits_memory_gib']:g} GiB"
+                + (f"\nwarning: {warning}" if warning else ""))
+    return "\n".join(x for x in (text, text_incomplete(answer.get("incomplete"))) if x)
+
+
+def text_incomplete(incomplete: dict[str, Any] | None) -> str:
+    """The line that keeps a partial answer from being read as a whole one; "" for a whole one."""
+    if not incomplete:
+        return ""
+
+    def some(names: list[str]) -> str:
+        return ", ".join(names[:8]) + (f" and {len(names) - 8} more" if len(names) > 8 else "")
+
+    out = f"incomplete: {incomplete.get('failed')} of {incomplete.get('of')} lookups of Hugging Face failed ({incomplete.get('cause')})"
+    if incomplete.get("publishers"):
+        out += f"; publishers not read: {some(incomplete['publishers'])}"
+    if incomplete.get("models"):
+        out += f"; models not judged: {some(incomplete['models'])}"
+    return out + ". What is listed is true; what is missing is not known, and is not a 'no'."
 
 
 def text_models(answer: dict[str, Any], builds: bool = True) -> str:
@@ -48,7 +70,8 @@ def text_models(answer: dict[str, Any], builds: bool = True) -> str:
 
 def text_new(answer: dict[str, Any]) -> str:
     """One line a model: what an agent needs to choose which to look at."""
-    out = [text_machine(answer), f"models since {answer['since']}: " + (", ".join(f"{v} {n}" for v, n in answer["counts"].items()) or "none")]
+    none = "none could be judged" if answer.get("incomplete") else "none"
+    out = [text_machine(answer), f"models since {answer['since']}: " + (", ".join(f"{v} {n}" for v, n in answer["counts"].items()) or none)]
     for j in answer["models"]:
         pick = j["pick"]
         best = f"{pick['quant']} {pick['gb']:g} GB" if pick else "-"
@@ -100,12 +123,15 @@ def counts(judged: list[Judged]) -> str:
     return ", ".join(f"{v} {n}" for v in ORDER if (n := sum(1 for j in judged if j.verdict == v)))
 
 
-def markdown(judged: list[Judged], since: str, m: Machine, b: Budgets, today: str, roster: dict[str, str] | None = None) -> str:
+def markdown(judged: list[Judged], since: str, m: Machine, b: Budgets, today: str, roster: dict[str, str] | None = None,
+             incomplete: dict[str, Any] | None = None) -> str:
     lines = [f"# Open-weights models since {since}, judged for this machine", "",
              f"Generated {today} by [ai-models-comparison](https://github.com/YauhenBichel/ai-models-comparison). "
              f"This machine: {m.ram / GIB:.0f} GiB of system memory, {m.gpu / GIB:.0f} GiB of GPU memory "
              f"({m.kind}{', unified' if m.unified else ''}). Budgets: "
              f"{b.gpu / GIB:.0f} GiB of weights on the GPU, {b.memory / GIB:.0f} GiB in memory. Nothing was downloaded.", ""]
+    if incomplete:
+        lines += [f"**This report is {text_incomplete(incomplete)}**", ""]
     if roster:
         lines += ["In use today: " + ", ".join(f"{r} = `{name}`" for r, name in sorted(roster.items())) + ".", ""]
     lines += ["| Model | Released | Kind | Weights | Verdict | Best build that fits | Role | Would replace | Note |",
@@ -115,7 +141,7 @@ def markdown(judged: list[Judged], since: str, m: Machine, b: Budgets, today: st
         pick = f"`{_pick(j)}`" if j.pick and j.verdict != "too big" else _pick(j)
         lines.append(f"| [{j.model}](https://huggingface.co/{j.model}) | {j.created} | {j.kind} | {params} | **{j.verdict}** | {pick} | "
                      f"{j.role} | {f'`{j.replaces}`' if j.replaces else ''} | {j.note} |")
-    lines += ["", f"Counts: {counts(judged)}." if judged else "No new models in the window.", "",
+    lines += ["", f"Counts: {counts(judged)}." if judged else "No models could be judged." if incomplete else "No new models in the window.", "",
               "A verdict is about memory only. Whether a model is better than the one in use is for your own tests to say."]
     return "\n".join(lines) + "\n"
 
@@ -156,7 +182,7 @@ def text_analysis(answer: dict[str, Any]) -> str:
         if r["left_out"]:
             out.append("  left out: " + ", ".join(f"{n} {why}" for why, n in r["left_out"].items()))
     if not answer["roles"]:
-        out.append("no models to analyse")
+        out.append("no models could be analysed" if answer.get("incomplete") else "no models to analyse")
     out += [f"{e['model']}: {e['error']}" for e in answer.get("errors") or []]
     out += ["", "Ranks are weights after the cost of quantization: an ordering, not a benchmark. Test the short list on your own tasks."]
     return "\n".join(out)

@@ -30,6 +30,9 @@ def cached(fetch: Fetch, where: Path | None = None, ttl: float = TTL, now: Calla
         saved = None
         with contextlib.suppress(OSError, ValueError):
             saved = json.loads(path.read_text())
+        if not (isinstance(saved, dict) and "body" in saved and isinstance(saved.get("t"), int | float)
+                and not isinstance(saved["t"], bool)):
+            saved = None   # not something this cache wrote: a miss, and the next answer overwrites it
         if saved is not None and now() - float(saved["t"]) < ttl:
             return saved["body"]
         try:

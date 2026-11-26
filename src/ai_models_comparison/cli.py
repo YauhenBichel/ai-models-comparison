@@ -38,9 +38,9 @@ from .hub import KINDS, Fetch, http_json
 from .judge import ORDER, Judged
 from .machine import SPEC, describe
 from .mcp import serve_stdio
-from .report import markdown, page, text_analysis, text_compare, text_models
+from .report import markdown, page, text_analysis, text_compare, text_incomplete, text_models
 from .server import Options, serve, static
-from .service import Service
+from .service import DEADLINE, Service
 
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "ai-models-comparison" / "config.toml"
 EXAMPLE = '''# ai-models-comparison configuration. Every key is optional.
@@ -55,6 +55,8 @@ EXAMPLE = '''# ai-models-comparison configuration. Every key is optional.
 # gpu_min_bits = 4       # a build under this is not called "fits the GPU"
 # memory_min_bits = 3    # a build under this is "low-bit only"
 # catalog = "https://example.org/catalog.json"   # read a published catalog instead of asking Hugging Face
+# deadline = 60          # seconds one question may take before it is answered with what is known, marked incomplete
+#                        # (default: 60 for `serve` and `mcp`, none for the other commands; 0 for none)
 # notify = "https://ntfy.sh/your-topic"   # one line there when a new model fits; or the AI_MODELS_COMPARISON_NOTIFY variable
 
 # [roster]               # what you run today, by role: the report says what a new model would replace
@@ -72,8 +74,13 @@ def load_config(path: str | None) -> dict[str, Any]:
         if path:
             raise ValueError(f"no such configuration file: {path}")
         return {}
-    with open(p, "rb") as fh:
-        return tomllib.load(fh)
+    try:
+        with open(p, "rb") as fh:
+            return tomllib.load(fh)
+    except tomllib.TOMLDecodeError as e:
+        raise ValueError(f"the configuration file {p} is not valid TOML: {e}") from None
+    except OSError as e:
+        raise ValueError(f"the configuration file {p} could not be read: {e.strerror or e}") from None
 
 
 def notify(url: str, text: str) -> None:
@@ -99,6 +106,12 @@ def spec_of(a: argparse.Namespace) -> dict[str, Any]:
 
 def dump(answer: Any) -> None:
     print(json.dumps(answer, indent=1))
+
+
+def warn(incomplete: dict[str, Any] | None) -> None:
+    """A partial answer says so where a person or a job's log will see it, whatever was asked to be printed."""
+    if incomplete:
+        print(f"ai-models-comparison: {text_incomplete(incomplete)}", file=sys.stderr)
 
 
 def cmd_machine(a: argparse.Namespace, s: Service) -> int:
@@ -133,7 +146,8 @@ def cmd_new(a: argparse.Namespace, s: Service) -> int:
             state = json.loads(Path(a.state).read_text())
     first_run = not state.get("seen")
     fresh: list[Judged] = [j for j in judged if j.verdict in ("fits the GPU", "fits in memory") and state["seen"].get(j.model) != j.verdict]
-    text = markdown(judged, c.since, m, b, today, s.cfg.get("roster"))
+    text = markdown(judged, c.since, m, b, today, s.cfg.get("roster"), c.incomplete)
+    warn(c.incomplete)
     if a.out:
         write_atomic(Path(a.out) / f"{today}.md", text)
         write_atomic(Path(a.out) / "latest.md", text)
@@ -165,7 +179,9 @@ def cmd_analyze(a: argparse.Namespace, s: Service) -> int:
 
 
 def cmd_catalog(a: argparse.Namespace, s: Service) -> int:
-    text = json.dumps(s.catalog(a.days, a.since, a.publisher, a.kind).to_dict(), separators=(",", ":"))
+    c = s.catalog(a.days, a.since, a.publisher, a.kind)
+    warn(c.incomplete)
+    text = json.dumps(c.to_dict(), separators=(",", ":"))
     if a.out:
         write_atomic(Path(a.out), text)
     else:
@@ -177,6 +193,7 @@ def cmd_site(a: argparse.Namespace, s: Service) -> int:
     """The page and the catalog as plain files: any static host serves them, and nobody's visit asks Hugging Face anything."""
     out = Path(a.out)
     c = s.catalog(a.days, a.since, a.publisher, a.kind)
+    warn(c.incomplete)
     for name in ("index.html", "app.js", "judge.js", "app.css"):
         write_atomic(out / name, static(name).decode())
     write_atomic(out / "catalog.json", json.dumps(c.to_dict(), separators=(",", ":")))
@@ -218,6 +235,9 @@ def main(argv: list[str] | None = None, fetch: Fetch | None = None) -> int:
     common.add_argument("--ram-reserve-gb", type=float, help="kept free for the system")
     common.add_argument("--catalog", help="a published catalog (an address or a file) to read instead of asking Hugging Face")
     common.add_argument("--no-cache", action="store_true", help="ask Hugging Face again instead of reusing answers of the last hours")
+    common.add_argument("--deadline", type=float, metavar="SECONDS",
+                        help=f"answer with what is known after this long, marked incomplete (default: {DEADLINE:g} for serve and mcp, "
+                             "none otherwise; 0 for none)")
     common.add_argument("--json", action="store_true", help="the answer as JSON, the same shape the HTTP API gives")
     window = argparse.ArgumentParser(add_help=False)
     window.add_argument("--days", type=int, default=45)
@@ -267,7 +287,8 @@ def main(argv: list[str] | None = None, fetch: Fetch | None = None) -> int:
     try:
         cfg = load_config(a.config)
         hub = fetch or (http_json if a.no_cache else cached(http_json))
-        return int(a.fn(a, Service(cfg, hub, a.catalog)))
+        deadline = a.deadline if a.deadline is not None else cfg.get("deadline", DEADLINE if a.cmd in ("serve", "mcp") else 0)
+        return int(a.fn(a, Service(cfg, hub, a.catalog, deadline=deadline)))
     except (ValueError, OSError) as e:   # a wrong value, a missing file, an unreachable hub: say it once, in the form asked for
         if getattr(a, "json", False):
             print(json.dumps({"error": {"code": "failed", "message": str(e)}}), file=sys.stderr)
