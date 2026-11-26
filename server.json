@@ -1,0 +1,38 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.YauhenBichel/ai-models-comparison",
+  "title": "AI models comparison",
+  "description": "Which new open-weights AI models fit this machine? Judges every GGUF build against your GPU and RAM.",
+  "websiteUrl": "https://github.com/YauhenBichel/ai-models-comparison#readme",
+  "repository": {
+    "url": "https://github.com/YauhenBichel/ai-models-comparison",
+    "source": "github"
+  },
+  "version": "0.2.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "ai-models-comparison",
+      "version": "0.2.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "HF_TOKEN",
+          "description": "A Hugging Face token. Optional: it only raises the rate limit. Never printed.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
