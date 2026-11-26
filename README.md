@@ -29,6 +29,17 @@ ai-models-comparison machine          # what this machine has
 ai-models-comparison analyze          # what is worth trying here, role by role, with reasons
 ```
 
+**From PyPI** (available after the first release from the
+[release workflow](.github/workflows/release.yml); until then use the commands above):
+
+```bash
+uvx ai-models-comparison serve --open        # run once, nothing kept
+uvx ai-models-comparison mcp                 # the MCP server, for an agent
+uv tool install ai-models-comparison         # or: pipx install ai-models-comparison
+```
+
+<!-- mcp-name: io.github.YauhenBichel/ai-models-comparison -->
+
 ## What you can ask
 
 | You want to know | Command | Guide |
