@@ -1,5 +1,7 @@
 # ai-models-comparison
 
+ai-models-comparison is a free command-line tool, web page and MCP server that tells you which new open-weights LLMs (GGUF builds from Hugging Face) fit your GPU and RAM, for people who run models locally with llama.cpp or Ollama.
+
 **New open-weights AI models, compared with the machine you have: which of them fit it, and which are worth trying?**
 
 New models appear every week, each in a dozen builds from 3 GB to 400 GB. If you run models at home or on one
@@ -29,13 +31,27 @@ ai-models-comparison machine          # what this machine has
 ai-models-comparison analyze          # what is worth trying here, role by role, with reasons
 ```
 
-**From PyPI** (available after the first release from the
-[release workflow](.github/workflows/release.yml); until then use the commands above):
+It is not on PyPI yet, so `uvx ai-models-comparison` and `pip install ai-models-comparison` do not work today. Use the
+commands above, which install from GitHub.
 
-```bash
-uvx ai-models-comparison serve --open        # run once, nothing kept
-uvx ai-models-comparison mcp                 # the MCP server, for an agent
-uv tool install ai-models-comparison         # or: pipx install ai-models-comparison
+Expected result of `ai-models-comparison compare Qwen/Qwen3-Coder-30B-A3B-Instruct Qwen/Qwen3-8B --gpu-gb 24 --ram-gb 64`
+(real output, taken when this README was written; the model list on Hugging Face changes):
+
+```text
+machine: 24 GiB GPU, 64 GiB system memory (given); fits the GPU up to 22.1 GiB of weights, fits in memory up to 70.1 GiB
+
+               Qwen3-Coder-30B-A3B-Instruct  Qwen3-8B
+verdict        fits the GPU                  fits the GPU
+best build     UD-Q5_K_XL                    Q8_0
+size           21.7 GB                       8.7 GB
+bits a weight  5.7                           8.5
+room left      2 GB                          15 GB
+weights        30.5B                         8.2B
+context        256k                          40k
+kind           text                          text
+licence        apache-2.0                    apache-2.0
+released       2025-07-31                    2025-04-27
+downloads      1,940,147                     5,638,481
 ```
 
 <!-- mcp-name: io.github.YauhenBichel/ai-models-comparison -->
@@ -64,7 +80,20 @@ the server.
 ## Use with other MCP clients (Grok Build, Cursor, any MCP client)
 
 `ai-models-comparison mcp` is an MCP server over stdio with four read-only tools. It is not on PyPI, so `uvx` takes
-it from GitHub. In `.mcp.json`, `.cursor/mcp.json` or the client's own server list:
+it from GitHub. For Claude Code:
+
+```bash
+claude mcp add ai-models-comparison -- uvx --from git+https://github.com/YauhenBichel/ai-models-comparison ai-models-comparison mcp
+```
+
+| Tool | What it does | Read-only |
+|---|---|---|
+| `machine` | GPU and system memory of the machine and the two budgets that follow; pass `gpu_gb` and `ram_gb` for another machine | yes |
+| `judge_models` | For one or several Hugging Face models: every GGUF build with its size and the best build that fits | yes |
+| `new_models` | The models the main publishers released in the last days, each judged for the machine, best fit first | yes |
+| `analyze` | Role by role (coder, general, vision, ocr, embed, audio): the short list worth trying on the machine, with reasons | yes |
+
+All four only read from Hugging Face's public API; they download no weights. In `.mcp.json`, `.cursor/mcp.json` or the client's own server list:
 
 ```json
 {
@@ -191,6 +220,41 @@ deliberately leaves to other tools.
 - **The analysis ranks by size after quantization.** It is an ordering with reasons, not a measurement.
 - **Public repositories only**, and Hugging Face allows about 500 questions in five minutes without a token;
   answers are cached for six hours, and `HF_TOKEN` in the environment is used when present and never printed.
+
+## When to use it, and when not
+
+Use it when a new model is announced and you want to know in a minute whether a build of it fits your GPU or
+memory, or when you want a daily list of new releases that fit.
+
+Do not use it to measure speed or quality, to run models, or to plan where the layers of a mixture-of-experts
+model go (use [moe-fit](https://github.com/YauhenBichel/moe-fit)).
+
+## FAQ
+
+### How do I know if a model fits my GPU?
+
+Run `ai-models-comparison judge ORG/MODEL`. It finds the GGUF builds, adds up the file sizes and compares them
+with your GPU and system memory. Use `--gpu-gb` and `--ram-gb` for a machine you do not have yet.
+
+### Does it send my data anywhere?
+
+It asks Hugging Face's public API about models, and nothing else. It sends no information about your machine;
+the budgets are computed locally. `HF_TOKEN`, if set, is used only to raise the rate limit and is never printed.
+It downloads no model weights.
+
+### How is it different from llmfit?
+
+llmfit has a large built-in model list and judges any model against your hardware. This tool watches the
+publishers you choose for new releases and uses the real file sizes of each build. See "Honest limits".
+
+### Does it tell me which model is best?
+
+No. A verdict is about memory only. The analysis ranks the models that fit by size after quantization and gives
+reasons; it is an ordering to decide what to test, not a benchmark.
+
+### Does it work without a GPU, or on a Mac?
+
+Yes. On Apple silicon it uses unified memory; with no GPU it judges against system memory. See "How it knows your machine".
 
 ## Contributing
 
